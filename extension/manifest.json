@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Mermaid Pan & Zoom for GitHub",
+  "version": "1.0.0",
+  "description": "Click a GitHub mermaid diagram to open a full-window viewer with drag to pan and wheel to zoom.",
+  "content_scripts": [
+    {
+      "matches": ["https://viewscreen.githubusercontent.com/*"],
+      "js": ["mermaid.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://github.com/*"],
+      "js": ["page.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
