@@ -11,7 +11,10 @@
     const svg = document.importNode(doc.documentElement, true);
     svg.querySelectorAll("script").forEach((s) => s.remove());
     svg.querySelectorAll("*").forEach((el) => {
-      [...el.attributes].forEach((a) => { if (/^on/i.test(a.name)) el.removeAttribute(a.name); });
+      [...el.attributes].forEach((a) => {
+        const scriptUrl = /href$/i.test(a.name) && /^\s*javascript:/i.test(a.value);
+        if (/^on/i.test(a.name) || scriptUrl) el.removeAttribute(a.name);
+      });
     });
 
     const backdrop = document.createElement("div");
