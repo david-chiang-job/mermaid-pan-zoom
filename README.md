@@ -1,12 +1,13 @@
 # Mermaid Pan & Zoom for GitHub
 
-A Chrome extension for reading mermaid diagrams on github.com.
+A Chrome extension for reading Mermaid diagrams and SVG files on github.com.
 
 GitHub's mermaid viewer only pans and zooms through small buttons that sit on top of the diagram.
 With this extension:
 
 - **On the page**, a diagram stays still. The mouse wheel scrolls the page as usual.
 - **Click a diagram** to open it in a full-window viewer.
+- **Click an SVG in rendered Markdown** to open the same viewer. On an SVG file page, use **Preview SVG** next to **Raw**.
 - **In the viewer**, drag to pan, use the mouse wheel to zoom, and double-click to reset.
   Close it with `Esc`, a click outside the diagram, or the ✕ in the corner.
 - GitHub's pan and zoom buttons on the diagram are hidden.
@@ -37,16 +38,17 @@ GitHub draws each mermaid diagram in an iframe on `viewscreen.githubusercontent.
 
 - `extension/mermaid.js` runs inside that iframe. It hides GitHub's buttons and, when you click the diagram, sends the rendered SVG to the page with `postMessage`.
 - `extension/page.js` runs on `github.com`. It receives the SVG and shows it in its own viewer. Pan and zoom change the SVG's `viewBox`, so text stays sharp at any zoom level.
+- The viewer displays standalone SVG files as images on a white background. The SVG file page uses the URL from GitHub's **Raw** link.
 
 ## Privacy
 
 The extension runs only on `github.com` and `viewscreen.githubusercontent.com`.
-It makes no network requests, stores nothing, and collects no data.
+It loads SVG images from their existing image URLs or through GitHub's **Raw** link when you request a preview. It stores nothing and collects no data.
 
 ## Limits
 
 - If GitHub changes how it embeds mermaid diagrams, the extension can stop working.
-- Only mermaid diagrams are handled. Images and other embedded viewers are left alone.
+- SVG images linked to unrelated pages, such as badges that link to a build status, keep their normal navigation.
 
 ## License
 
