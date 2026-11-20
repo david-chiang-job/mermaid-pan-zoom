@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mermaid Pan & Zoom for GitHub",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Open GitHub Mermaid diagrams and SVG images in a full-window viewer with drag to pan and wheel to zoom.",
   "content_scripts": [
     {

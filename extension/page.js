@@ -3,6 +3,7 @@
 (() => {
   const FRAME_ORIGIN = "https://viewscreen.githubusercontent.com";
   const SVG_NS = "http://www.w3.org/2000/svg";
+  const SVG_BACKGROUND = "#dce0e4";
   const STEP = 1.15;
   let dismissViewer;
 
@@ -43,7 +44,7 @@
     const drawing = await readHoverSvg(src);
     if (location.href !== page) return;
     if (drawing) {
-      open(drawing, "#fff", true);
+      open(drawing, SVG_BACKGROUND, true);
       return;
     }
     const { naturalWidth: width, naturalHeight: height } = img;
@@ -54,7 +55,7 @@
     image.setAttribute("width", width);
     image.setAttribute("height", height);
     svg.appendChild(image);
-    open(svg, "#fff");
+    open(svg, SVG_BACKGROUND);
   }
 
   function svgFrame(svg, title, onReady) {
@@ -221,7 +222,7 @@
       drawing.style.height = "100%";
       drawing.style.display = "block";
       frameDoc.addEventListener("click", (e) => {
-        if (isPrimaryClick(e)) open(svg, "#fff", true);
+        if (isPrimaryClick(e)) open(svg, SVG_BACKGROUND, true);
       });
       img.style.opacity = "0";
       frame.style.visibility = "visible";
@@ -229,6 +230,7 @@
     frame.dataset.pzInlineSvg = "";
     frame.tabIndex = -1;
     frame.style.cssText += "position:absolute;inset:0;visibility:hidden;";
+    frame.style.backgroundColor = SVG_BACKGROUND;
     img.before(wrapper);
     wrapper.append(img, frame);
   }
@@ -294,6 +296,7 @@
     document.querySelectorAll(".markdown-body img").forEach(img => {
       if (seenImages.has(img) || !markdownSvgSource(img)) return;
       seenImages.add(img);
+      img.style.backgroundColor = SVG_BACKGROUND;
       visibleImages.observe(img);
     });
   };
