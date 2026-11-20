@@ -39,7 +39,7 @@ GitHub draws each mermaid diagram in an iframe on `viewscreen.githubusercontent.
 
 - `extension/mermaid.js` runs inside that iframe. It hides GitHub's buttons and, when you click the diagram, sends the rendered SVG to the page with `postMessage`.
 - `extension/page.js` runs on `github.com`. It receives the SVG and shows it in its own viewer. Pan and zoom change the SVG's `viewBox`, so text stays sharp at any zoom level.
-- The viewer displays standalone SVG files as images on a white background. The SVG file page uses the URL from GitHub's **Raw** link.
+- SVGs in rendered Markdown and the SVG viewer get a muted light gray background so dark linework stays legible on dark GitHub themes. The SVG file page uses the URL from GitHub's **Raw** link.
 - When a readable SVG uses CSS hover details, the extension displays those details in the page and in the full-window viewer. Both use isolated frames with scripts disabled.
 
 ## Privacy
