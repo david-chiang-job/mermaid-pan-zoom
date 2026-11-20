@@ -20,19 +20,36 @@
     open(svg);
   }
 
-  function openImage(img) {
+  async function openImage(img) {
+    const src = img.currentSrc || img.src;
+    const page = location.href;
+    try {
+      const response = await fetch(src, { signal: AbortSignal.timeout(2000) });
+      if (response.ok) {
+        const doc = new DOMParser().parseFromString(await response.text(), "image/svg+xml");
+        const svg = doc.documentElement;
+        if (svg.namespaceURI === SVG_NS && svg.localName === "svg" &&
+            Array.from(svg.querySelectorAll("style")).some(style => style.textContent.includes(":hover"))) {
+          if (location.href === page) open(svg, "#fff", true);
+          return;
+        }
+      }
+    } catch {
+      // Images that cannot be read through CORS still work as static previews.
+    }
+    if (location.href !== page) return;
     const { naturalWidth: width, naturalHeight: height } = img;
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
     const image = document.createElementNS(SVG_NS, "image");
-    image.setAttribute("href", img.currentSrc || img.src);
+    image.setAttribute("href", src);
     image.setAttribute("width", width);
     image.setAttribute("height", height);
     svg.appendChild(image);
     open(svg, "#fff");
   }
 
-  function open(svg, background = "#0d1117") {
+  function open(svg, background = "#0d1117", interactive = false) {
     dismissViewer?.();
     const backdrop = document.createElement("div");
     backdrop.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(1,4,9,.8);";
@@ -42,18 +59,55 @@
     const close = document.createElement("div");
     close.textContent = "✕";
     close.style.cssText = "position:absolute;top:8px;right:14px;z-index:1;color:#9198a1;font-size:22px;cursor:pointer;";
-    panel.append(svg, close);
+    let frame;
+    if (interactive) {
+      frame = document.createElement("iframe");
+      frame.title = "Interactive SVG";
+      frame.setAttribute("sandbox", "allow-same-origin");
+      frame.style.cssText = "display:block;width:100%;height:100%;border:0;";
+      frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'">' +
+        '<style>html,body{margin:0;height:100%;overflow:hidden}</style>';
+      frame.addEventListener("load", () => {
+        const frameDoc = frame.contentDocument;
+        if (!frameDoc || !backdrop.isConnected) return;
+        const drawing = frameDoc.importNode(svg, true);
+        drawing.querySelectorAll("a, foreignObject, script").forEach(element => {
+          if (element.localName === "a") element.replaceWith(...element.childNodes);
+          else element.remove();
+        });
+        frameDoc.body.append(drawing);
+        installControls(drawing, frameDoc.documentElement, close);
+        frameDoc.addEventListener("keydown", onKey);
+      }, { once: true });
+    }
+    panel.append(frame || svg, close);
     backdrop.appendChild(panel);
 
+    const scrollWas = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+
+    const dismiss = () => {
+      backdrop.remove();
+      document.documentElement.style.overflow = scrollWas;
+      document.removeEventListener("keydown", onKey);
+      dismissViewer = undefined;
+    };
+    const onKey = (e) => { if (e.key === "Escape") dismiss(); };
+    dismissViewer = dismiss;
+    document.addEventListener("keydown", onKey);
+    close.addEventListener("click", dismiss);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) dismiss(); });
+    document.body.appendChild(backdrop);
+    if (!frame) installControls(svg, panel, close);
+  }
+
+  function installControls(svg, target, close) {
     svg.removeAttribute("style");
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "100%");
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
     svg.style.display = "block";
-    const scrollWas = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    document.body.appendChild(backdrop);
-
+    target.style.cursor = "grab";
     if (!svg.viewBox.baseVal || svg.viewBox.baseVal.width === 0) {
       const b = svg.getBBox();
       svg.setAttribute("viewBox", `${b.x} ${b.y} ${b.width} ${b.height}`);
@@ -61,7 +115,7 @@
     const vb = svg.viewBox.baseVal;
     const initial = { x: vb.x, y: vb.y, w: vb.width, h: vb.height };
 
-    panel.addEventListener("wheel", (e) => {
+    target.addEventListener("wheel", (e) => {
       e.preventDefault();
       const pt = svg.createSVGPoint();
       pt.x = e.clientX;
@@ -75,14 +129,14 @@
     }, { passive: false });
 
     let last = null;
-    panel.addEventListener("pointerdown", (e) => {
+    target.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || e.target === close) return;
       last = { x: e.clientX, y: e.clientY };
-      panel.setPointerCapture(e.pointerId);
-      panel.style.cursor = "grabbing";
+      target.setPointerCapture(e.pointerId);
+      target.style.cursor = "grabbing";
       e.preventDefault();
     });
-    panel.addEventListener("pointermove", (e) => {
+    target.addEventListener("pointermove", (e) => {
       if (!last) return;
       const ctm = svg.getScreenCTM();
       vb.x -= (e.clientX - last.x) / ctm.a;
@@ -91,28 +145,17 @@
     });
     const end = () => {
       last = null;
-      panel.style.cursor = "grab";
+      target.style.cursor = "grab";
     };
-    panel.addEventListener("pointerup", end);
-    panel.addEventListener("pointercancel", end);
-    panel.addEventListener("dblclick", () => {
+    target.addEventListener("pointerup", end);
+    target.addEventListener("pointercancel", end);
+    target.addEventListener("dblclick", () => {
       vb.x = initial.x;
       vb.y = initial.y;
       vb.width = initial.w;
       vb.height = initial.h;
     });
 
-    const dismiss = () => {
-      backdrop.remove();
-      document.documentElement.style.overflow = scrollWas;
-      document.removeEventListener("keydown", onKey);
-      dismissViewer = undefined;
-    };
-    dismissViewer = dismiss;
-    const onKey = (e) => { if (e.key === "Escape") dismiss(); };
-    document.addEventListener("keydown", onKey);
-    close.addEventListener("click", dismiss);
-    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) dismiss(); });
   }
 
   window.addEventListener("message", (e) => {
