@@ -6,6 +6,7 @@ GitHub's mermaid viewer only pans and zooms through small buttons that sit on to
 With this extension:
 
 - **On the page**, a diagram stays still. The mouse wheel scrolls the page as usual.
+- **Hover over a chart** to see details in place when its SVG provides CSS hover details.
 - **Click a diagram** to open it in a full-window viewer.
 - **Click an SVG in rendered Markdown** to open the same viewer. On an SVG file page, use **Preview SVG** next to **Raw**.
 - **In the viewer**, drag to pan, use the mouse wheel to zoom, and double-click to reset.
@@ -39,17 +40,18 @@ GitHub draws each mermaid diagram in an iframe on `viewscreen.githubusercontent.
 - `extension/mermaid.js` runs inside that iframe. It hides GitHub's buttons and, when you click the diagram, sends the rendered SVG to the page with `postMessage`.
 - `extension/page.js` runs on `github.com`. It receives the SVG and shows it in its own viewer. Pan and zoom change the SVG's `viewBox`, so text stays sharp at any zoom level.
 - The viewer displays standalone SVG files as images on a white background. The SVG file page uses the URL from GitHub's **Raw** link.
-- When the original SVG is readable and uses CSS hover details, the viewer preserves them inside an isolated frame with scripts disabled.
+- When a readable SVG uses CSS hover details, the extension displays those details in the page and in the full-window viewer. Both use isolated frames with scripts disabled.
 
 ## Privacy
 
 The extension runs only on `github.com` and `viewscreen.githubusercontent.com`.
-It loads SVG images from their existing image URLs or through GitHub's **Raw** link when you request a preview. It stores nothing and collects no data.
+It reads visible SVG images from their existing image URLs and uses GitHub's **Raw** link for file previews. It stores nothing and collects no data.
 
 ## Limits
 
 - If GitHub changes how it embeds mermaid diagrams, the extension can stop working.
 - SVG images linked to unrelated pages, such as badges that link to a build status, keep their normal navigation.
+- If the browser cannot read an SVG's source, the extension displays it as a static image.
 
 ## License
 

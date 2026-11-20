@@ -20,9 +20,7 @@
     open(svg);
   }
 
-  async function openImage(img) {
-    const src = img.currentSrc || img.src;
-    const page = location.href;
+  async function readHoverSvg(src) {
     try {
       const response = await fetch(src, { signal: AbortSignal.timeout(2000) });
       if (response.ok) {
@@ -30,14 +28,24 @@
         const svg = doc.documentElement;
         if (svg.namespaceURI === SVG_NS && svg.localName === "svg" &&
             Array.from(svg.querySelectorAll("style")).some(style => style.textContent.includes(":hover"))) {
-          if (location.href === page) open(svg, "#fff", true);
-          return;
+          return svg;
         }
       }
     } catch {
-      // Images that cannot be read through CORS still work as static previews.
+      // Images that cannot be read through CORS still work as images.
     }
+    return null;
+  }
+
+  async function openImage(img) {
+    const src = img.currentSrc || img.src;
+    const page = location.href;
+    const drawing = await readHoverSvg(src);
     if (location.href !== page) return;
+    if (drawing) {
+      open(drawing, "#fff", true);
+      return;
+    }
     const { naturalWidth: width, naturalHeight: height } = img;
     const svg = document.createElementNS(SVG_NS, "svg");
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -47,6 +55,27 @@
     image.setAttribute("height", height);
     svg.appendChild(image);
     open(svg, "#fff");
+  }
+
+  function svgFrame(svg, title, onReady) {
+    const frame = document.createElement("iframe");
+    frame.title = title;
+    frame.setAttribute("sandbox", "allow-same-origin");
+    frame.style.cssText = "display:block;width:100%;height:100%;border:0;";
+    frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'">' +
+      '<style>html,body{margin:0;height:100%;overflow:hidden}</style>';
+    frame.addEventListener("load", () => {
+      const frameDoc = frame.contentDocument;
+      if (!frameDoc || !frame.isConnected) return;
+      const drawing = frameDoc.importNode(svg, true);
+      drawing.querySelectorAll("a, foreignObject, script").forEach(element => {
+        if (element.localName === "a") element.replaceWith(...element.childNodes);
+        else element.remove();
+      });
+      frameDoc.body.append(drawing);
+      onReady(drawing, frameDoc);
+    }, { once: true });
+    return frame;
   }
 
   function open(svg, background = "#0d1117", interactive = false) {
@@ -61,24 +90,11 @@
     close.style.cssText = "position:absolute;top:8px;right:14px;z-index:1;color:#9198a1;font-size:22px;cursor:pointer;";
     let frame;
     if (interactive) {
-      frame = document.createElement("iframe");
-      frame.title = "Interactive SVG";
-      frame.setAttribute("sandbox", "allow-same-origin");
-      frame.style.cssText = "display:block;width:100%;height:100%;border:0;";
-      frame.srcdoc = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'">' +
-        '<style>html,body{margin:0;height:100%;overflow:hidden}</style>';
-      frame.addEventListener("load", () => {
-        const frameDoc = frame.contentDocument;
-        if (!frameDoc || !backdrop.isConnected) return;
-        const drawing = frameDoc.importNode(svg, true);
-        drawing.querySelectorAll("a, foreignObject, script").forEach(element => {
-          if (element.localName === "a") element.replaceWith(...element.childNodes);
-          else element.remove();
-        });
-        frameDoc.body.append(drawing);
+      frame = svgFrame(svg, "Interactive SVG", (drawing, frameDoc) => {
         installControls(drawing, frameDoc.documentElement, close);
         frameDoc.addEventListener("keydown", onKey);
-      }, { once: true });
+        frame.focus();
+      });
     }
     panel.append(frame || svg, close);
     backdrop.appendChild(panel);
@@ -168,19 +184,63 @@
     return !!url && /^https?:$/.test(url.protocol) && /\.svg$/i.test(url.pathname);
   }
 
-  document.addEventListener("click", (e) => {
-    if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-    const img = e.target;
-    if (!(img instanceof HTMLImageElement) || !img.closest(".markdown-body") || !img.naturalWidth) return;
+  function markdownSvgSource(img) {
+    if (!img.closest(".markdown-body")) return null;
     const src = img.currentSrc || img.src;
-    if (!isSvgUrl(src) && !isSvgUrl(img.getAttribute("data-canonical-src"))) return;
+    if (!isSvgUrl(src) && !isSvgUrl(img.getAttribute("data-canonical-src"))) return null;
     const link = img.closest("a[href]");
     // Badges and logos can link to a different page. Keep those links usable.
-    if (link && link.href !== src && link.href !== img.src && !isSvgUrl(link.href)) return;
+    if (link && link.href !== src && link.href !== img.src && !isSvgUrl(link.href)) return null;
+    return src;
+  }
+
+  function isPrimaryClick(e) {
+    return !e.defaultPrevented && e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+  }
+
+  document.addEventListener("click", (e) => {
+    const img = e.target;
+    if (!isPrimaryClick(e) || !(img instanceof HTMLImageElement) || !img.naturalWidth || !markdownSvgSource(img)) return;
     e.preventDefault();
     e.stopPropagation();
     openImage(img);
   }, true);
+
+  async function enableInlineHover(img) {
+    const src = markdownSvgSource(img);
+    if (!src) return;
+    const page = location.href;
+    const svg = await readHoverSvg(src);
+    if (!svg || !img.isConnected || location.href !== page || markdownSvgSource(img) !== src) return;
+
+    // Keep the image in the layout so its responsive size still comes from GitHub.
+    const wrapper = document.createElement("span");
+    wrapper.style.cssText = "display:inline-block;position:relative;max-width:100%;";
+    const frame = svgFrame(svg, img.alt || "Interactive SVG", (drawing, frameDoc) => {
+      drawing.style.width = "100%";
+      drawing.style.height = "100%";
+      drawing.style.display = "block";
+      frameDoc.addEventListener("click", (e) => {
+        if (isPrimaryClick(e)) open(svg, "#fff", true);
+      });
+      img.style.opacity = "0";
+      frame.style.visibility = "visible";
+    });
+    frame.dataset.pzInlineSvg = "";
+    frame.tabIndex = -1;
+    frame.style.cssText += "position:absolute;inset:0;visibility:hidden;";
+    img.before(wrapper);
+    wrapper.append(img, frame);
+  }
+
+  const seenImages = new WeakSet();
+  const visibleImages = new IntersectionObserver(entries => {
+    for (const { target, isIntersecting } of entries) {
+      if (!isIntersecting) continue;
+      visibleImages.unobserve(target);
+      enableInlineHover(target);
+    }
+  });
 
   function addFilePreview() {
     const isSvgFile = /^\/[^/]+\/[^/]+\/blob\/.+\.svg$/i.test(location.pathname);
@@ -231,6 +291,11 @@
       if (!f.closest('dialog, [role="dialog"]')) hideToolbar(f);
     });
     addFilePreview();
+    document.querySelectorAll(".markdown-body img").forEach(img => {
+      if (seenImages.has(img) || !markdownSvgSource(img)) return;
+      seenImages.add(img);
+      visibleImages.observe(img);
+    });
   };
   let queued = false;
   new MutationObserver(() => {
